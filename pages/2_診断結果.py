@@ -7,6 +7,7 @@ from modules.scoring import (
     compare_with_average,
     get_improvement_priorities,
     get_score_summary,
+    get_category_max_score,
     INDUSTRY_AVERAGES
 )
 from modules.questions import CATEGORIES
@@ -27,9 +28,20 @@ if "answers" not in st.session_state or len(st.session_state.answers) == 0:
 
 # スコア計算
 try:
+    # デバッグ: 回答データを確認
+    if "answers" in st.session_state:
+        # 回答データの型を確認
+        answers = st.session_state.answers
+        # すべての回答が整数（インデックス）であることを確認
+        for q_id, answer in answers.items():
+            if not isinstance(answer, int):
+                st.warning(f"質問 {q_id} の回答が整数ではありません: {type(answer)} = {answer}")
+    
     summary = get_score_summary(st.session_state.answers)
 except Exception as e:
     st.error(f"スコア計算中にエラーが発生しました: {str(e)}")
+    import traceback
+    st.code(traceback.format_exc())
     st.stop()
 
 st.title("📊 AI導入準備度診断結果")
@@ -94,24 +106,20 @@ fig.add_trace(go.Scatterpolar(
 ))
 
 # 最大スコアを取得（各カテゴリーの最大スコアを計算）
-max_scores = []
+max_scores = {}
 for cat in category_keys:
-    max_score = 0
-    from modules.questions import QUESTIONS
-    for question in QUESTIONS[cat]:
-        max_choice_score = max(choice["score"] for choice in question["choices"])
-        max_score += max_choice_score
-    max_scores.append(max_score)
+    max_scores[cat] = get_category_max_score(cat)
 
 # レーダーチャートの設定
+max_max_score = max(max_scores.values()) if max_scores else 100
 fig.update_layout(
     polar=dict(
         radialaxis=dict(
             visible=True,
-            range=[0, max(max_scores)],
+            range=[0, max_max_score],
             tickmode='linear',
             tick0=0,
-            dtick=max(max_scores) // 5
+            dtick=max_max_score // 5
         )
     ),
     showlegend=True,
@@ -133,7 +141,7 @@ for category, category_name in CATEGORIES.items():
     score = summary['scores']['category_scores'][category]
     diff = comparison[category]
     percentage = category_percentages[category]
-    max_score = max_scores[category_keys.index(category)]
+    max_score = max_scores.get(category, 100)
     
     # カード形式で表示
     with st.container():
@@ -172,7 +180,7 @@ else:
 
 for i, (category, score) in enumerate(top3, 1):
     category_name = CATEGORIES[category]
-    max_score = max_scores[category_keys.index(category)]
+    max_score = max_scores.get(category, 100)
     percentage = category_percentages[category]
     
     with st.container():
@@ -224,7 +232,12 @@ st.markdown("---")
 col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("🔄 診断をやり直す", use_container_width=True):
+        # セッション状態をクリア
         st.session_state.answers = {}
+        # ラジオボタンのセッション状態もクリア
+        keys_to_delete = [key for key in st.session_state.keys() if key.startswith("radio_")]
+        for key in keys_to_delete:
+            del st.session_state[key]
         st.switch_page("pages/1_診断開始.py")
 with col2:
     if st.button("💰 料金プランを見る", use_container_width=True):
