@@ -241,7 +241,8 @@ with col1:
         st.switch_page("pages/1_診断開始.py")
 with col2:
     if st.button("💰 料金プランを見る", use_container_width=True):
-        st.switch_page("app.py")
+        # 料金プランページに直接遷移
+        st.switch_page("pages/3_料金プラン.py")
 with col3:
     if st.button("📧 お問い合わせ", use_container_width=True):
         st.info("お問い合わせフォームは準備中です。")

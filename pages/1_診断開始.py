@@ -83,6 +83,56 @@ st.markdown("---")
 # 全質問数を計算
 total_questions = sum(len(questions) for questions in QUESTIONS.values())
 
+# 進捗（sticky表示用）
+answered_top = len(st.session_state.answers)
+progress_top = answered_top / total_questions if total_questions > 0 else 0.0
+
+# Sticky Progress Bar用のCSS
+st.markdown(
+    """
+    <style>
+    .progress-sticky-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 999;
+        background-color: #0e1117;
+        padding: 12px 20px 16px 20px;
+        border-bottom: 1px solid rgba(250, 250, 250, 0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Streamlitのメインコンテナに上部パディングを追加して、固定バーの下にコンテンツが隠れないようにする */
+    .main .block-container {
+        padding-top: 80px !important;
+    }
+    
+    /* サイドバーがある場合の調整 */
+    [data-testid="stSidebar"] ~ .main .block-container {
+        padding-top: 80px !important;
+    }
+    
+    /* サイドバーの幅を考慮して進捗バーの位置を調整 */
+    @media (min-width: 768px) {
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .progress-sticky-wrapper {
+            margin-left: 21rem;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Sticky Progress Bar
+st.markdown('<div class="progress-sticky-wrapper">', unsafe_allow_html=True)
+c1, c2 = st.columns([3, 1])
+with c1:
+    st.progress(progress_top)
+with c2:
+    st.markdown(f"**回答済み: {answered_top}/{total_questions}問**")
+st.markdown("</div>", unsafe_allow_html=True)
+
 # 各カテゴリーの質問を表示
 for category, category_name in CATEGORIES.items():
     st.subheader(f"📊 {category_name}")
@@ -103,7 +153,25 @@ for category, category_name in CATEGORIES.items():
         # ラジオボタンのセッション状態キー
         radio_key = f"radio_{question_id}"
         # 既に選択したインデックス（プレースホルダーを含めたindex）
-        saved_index = st.session_state.get(radio_key, 0)
+        saved_index_raw = st.session_state.get(radio_key, 0)
+        saved_index = saved_index_raw if isinstance(saved_index_raw, int) and saved_index_raw >= 0 else 0
+        
+        # 回答を保存するコールバック関数
+        def make_save_answer_callback(q_id, r_key):
+            def save_answer():
+                # on_changeコールバック内では、st.session_stateから現在の値を取得する
+                current_value = st.session_state.get(r_key, 0)
+                if isinstance(current_value, int) and current_value > 0:
+                    # プレースホルダー(0)以外を回答として保存
+                    answer_index = current_value - 1  # プレースホルダー分を補正
+                    st.session_state.answers[q_id] = answer_index
+                else:
+                    # プレースホルダーの場合は未回答扱いにする
+                    if q_id in st.session_state.answers:
+                        del st.session_state.answers[q_id]
+            return save_answer
+        
+        save_answer_callback = make_save_answer_callback(question_id, radio_key)
         
         # 未回答の場合は、ラジオボタンを半透明表示
         if saved_index == 0:
@@ -114,7 +182,8 @@ for category, category_name in CATEGORIES.items():
             options=option_values,  # use int values
             format_func=lambda i: display_options[i],
             index=saved_index,
-            key=radio_key
+            key=radio_key,
+            on_change=save_answer_callback
         )
         
         if saved_index == 0:
@@ -137,15 +206,6 @@ for category, category_name in CATEGORIES.items():
 # 回答状況の再計算（入力処理後に計算して遅延を防ぐ）
 answered = len(st.session_state.answers)
 progress = answered / total_questions if total_questions > 0 else 0.0
-
-# 進捗表示
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.progress(progress)
-with col2:
-    st.markdown(f"**回答済み: {answered}/{total_questions}問**")
-
-st.markdown("---")
 
 # 全問回答済みの場合、結果ページへのボタンを表示
 if answered == total_questions:
