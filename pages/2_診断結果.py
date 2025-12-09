@@ -10,7 +10,7 @@ from modules.scoring import (
     get_category_max_score,
     INDUSTRY_AVERAGES
 )
-from modules.questions import CATEGORIES
+from modules.questions import CATEGORIES, QUESTIONS
 
 # ページ設定
 st.set_page_config(
@@ -247,3 +247,162 @@ with col3:
     if st.button("📧 お問い合わせ", use_container_width=True):
         st.info("お問い合わせフォームは準備中です。")
 
+# 既存のコードの最後に追加
+
+# ======================================
+# データベース保存とエクスポート機能
+# ======================================
+from modules.database import DiagnosisDatabase
+from modules.pdf_generator import DiagnosticPDFGenerator
+from modules.report_exporter import ReportExporter
+from datetime import datetime
+
+st.markdown("---")
+st.header("📤 結果の保存とエクスポート")
+
+# データベース初期化
+db = DiagnosisDatabase()
+
+# 必要な変数をsummaryから取得
+total_score = summary['scores']['total_score']
+max_score = summary['scores']['max_score']
+percentage = summary['scores']['percentage']
+category_scores = summary['scores']['category_scores']
+
+# 質問データを取得（全カテゴリーの質問をフラットなリストに）
+all_questions = []
+for category_key, category_name in CATEGORIES.items():
+    category_questions = QUESTIONS.get(category_key, [])
+    for q in category_questions:
+        all_questions.append({
+            'category': category_key,
+            'category_name': category_name,
+            'id': q['id'],
+            'text': q['text']
+        })
+
+# 診断データの準備
+diagnosis_data = {
+    'facility_name': st.session_state.get('facility_name', ''),
+    'diagnosis_date': datetime.now(),
+    'total_score': total_score,
+    'max_score': max_score,
+    'percentage': percentage,
+    'rank': rank,
+    'categories': [
+        {
+            'name': category,
+            'score': score,
+            'percentage': (score / max_scores.get(category, 100)) * 100 if max_scores.get(category, 100) > 0 else 0,
+            'diff': score - comparison.get(category, 0),
+            'comment': f'{CATEGORIES.get(category, category)}のスコアは{score}点です。'
+        }
+        for category, score in category_scores.items()
+    ],
+    'answers': [
+        {
+            'category': q['category'],
+            'category_name': q['category_name'],
+            'number': idx + 1,
+            'question_id': q['id'],
+            'question': q['text'],
+            'answer': st.session_state.answers.get(q['id'], '選択されていません')
+        }
+        for idx, q in enumerate(all_questions)
+    ],
+    'session_id': st.session_state.get('session_id', ''),
+    'user_id': st.session_state.get('user_id', '')
+}
+
+# 改善提案TOP3を生成
+sorted_categories = sorted(
+    diagnosis_data['categories'],
+    key=lambda x: x['score']
+)[:3]
+
+top3_improvements = [
+    {
+        'category': cat['name'],
+        'score': cat['score'],
+        'percentage': cat['percentage'],
+        'diff': cat['diff'],
+        'suggestion': f"{cat['name']}の改善を優先的に進めることを推奨します。経営陣とAI導入の効果について認識を共有し、ROI目標を設定し、予算確保の計画を立ててください。"
+    }
+    for cat in sorted_categories
+]
+
+diagnosis_data['top3_improvements'] = top3_improvements
+
+# エクスポートボタン
+col1, col2, col3, col4 = st.columns(4)
+
+exporter = ReportExporter()
+pdf_gen = DiagnosticPDFGenerator()
+
+with col1:
+    if st.button("💾 履歴に保存", type="primary", use_container_width=True):
+        try:
+            diagnosis_id = db.save_diagnosis(diagnosis_data)
+            st.success(f"✅ 診断結果を保存しました（ID: {diagnosis_id}）")
+        except Exception as e:
+            st.error(f"❌ 保存エラー: {e}")
+
+with col2:
+    # JSON ダウンロード
+    try:
+        json_data = exporter.export_to_json(diagnosis_data)
+        st.download_button(
+            label="📄 JSON",
+            data=json_data,
+            file_name=f"診断結果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            use_container_width=True
+        )
+    except Exception as e:
+        st.error(f"JSON エラー: {e}")
+
+with col3:
+    # CSV ダウンロード
+    try:
+        csv_data = exporter.export_to_csv(diagnosis_data)
+        st.download_button(
+            label="📊 CSV",
+            data=csv_data,
+            file_name=f"診断結果_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    except Exception as e:
+        st.error(f"CSV エラー: {e}")
+
+with col4:
+    # PDF 生成
+    if st.button("📕 PDF生成", use_container_width=True):
+        with st.spinner("PDF生成中... しばらくお待ちください"):
+            try:
+                pdf_filename = f"診断結果レポート_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                pdf_path = pdf_gen.generate_pdf(diagnosis_data, filename=pdf_filename)
+                
+                st.success("✅ PDF生成完了！")
+                
+                with open(pdf_path, "rb") as pdf_file:
+                    st.download_button(
+                        label="📕 PDFをダウンロード",
+                        data=pdf_file,
+                        file_name=pdf_filename,
+                        mime="application/pdf",
+                        key="pdf_download",
+                        use_container_width=True
+                    )
+            
+            except Exception as e:
+                st.error(f"❌ PDF生成エラー: {e}")
+                st.exception(e)
+
+# 履歴ページへのリンク
+st.markdown("---")
+st.info("💡 過去の診断結果を確認するには、診断履歴ページをご利用ください")
+
+if st.button("📚 診断履歴を見る", use_container_width=True):
+    st.switch_page("pages/3_📚_診断履歴.py")
+    

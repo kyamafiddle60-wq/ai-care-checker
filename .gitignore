@@ -56,3 +56,6 @@ data/*.json
 assets/*.mp4
 assets/*.mov
 
+
+# Generated PDF files
+診断結果レポート_*.pdf
