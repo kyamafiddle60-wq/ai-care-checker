@@ -322,11 +322,11 @@ sorted_categories = sorted(
 
 top3_improvements = [
     {
-        'category': cat['name'],
+        'category': CATEGORIES.get(cat['name'], cat['name']),
         'score': cat['score'],
         'percentage': cat['percentage'],
         'diff': cat['diff'],
-        'suggestion': f"{cat['name']}の改善を優先的に進めることを推奨します。経営陣とAI導入の効果について認識を共有し、ROI目標を設定し、予算確保の計画を立ててください。"
+        'suggestion': f"{CATEGORIES.get(cat['name'], cat['name'])}の改善を優先的に進めることを推奨します。経営陣とAI導入の効果について認識を共有し、ROI目標を設定し、予算確保の計画を立ててください。"
     }
     for cat in sorted_categories
 ]

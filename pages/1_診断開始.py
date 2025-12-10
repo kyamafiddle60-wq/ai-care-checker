@@ -13,42 +13,183 @@ st.title("🏥 AI導入準備度診断（30問）")
 # 表示文言修正：慎重に→もっとも当てはまる
 st.markdown("### 各質問について、もっとも当てはまる選択肢を選んでください。")
 
-# CSSスタイルを追加（未回答のラジオボタンを視覚的に区別）
 st.markdown("""
 <style>
-    /* 未回答のラジオボタンコンテナに特別なスタイルを適用 */
-    div[data-question-id] {
-        opacity: 0.5 !important;
-        filter: grayscale(40%) !important;
-        transition: opacity 0.3s ease, filter 0.3s ease;
-    }
-    
-    /* 未回答のラジオボタン内のすべての要素を半透明に */
-    div[data-question-id] div[data-testid="stRadio"] {
-        opacity: 0.5 !important;
-    }
-    
-    /* 未回答のラジオボタンのラベルテキスト */
-    div[data-question-id] label {
-        color: rgba(250, 250, 250, 0.6) !important;
-        opacity: 0.6 !important;
-    }
-    
-    /* 未回答のラジオボタンの円形部分 */
-    div[data-question-id] input[type="radio"] {
-        opacity: 0.5 !important;
-    }
-    
-    /* ホバー時に少し明るくする */
-    div[data-question-id]:hover {
-        opacity: 0.75 !important;
-        filter: grayscale(25%) !important;
-    }
-    
-    div[data-question-id]:hover div[data-testid="stRadio"] {
-        opacity: 0.75 !important;
+    /* ラジオボタンを確実に表示 */
+    [data-baseweb="radio"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 </style>
+<script>
+(function() {
+    const GREEN = '#10b981';
+    const RED = '#ef4444';
+    
+    function applyRadioColors() {
+        // すべてのラジオボタンを取得
+        const radios = document.querySelectorAll('[data-baseweb="radio"]');
+        
+        if (radios.length === 0) {
+            return;
+        }
+        
+        // ラジオボタンをグループごとに処理（同じ質問のラジオボタンは同じ親要素の下に存在）
+        const radioGroups = new Map();
+        
+        radios.forEach(radio => {
+            // 親要素を探す（ラジオボタンのグループ）
+            let parent = radio.closest('div[data-testid], div[class*="radio"], div[class*="stRadio"]');
+            if (!parent) {
+                parent = radio.parentElement;
+            }
+            
+            const groupId = parent ? parent.getAttribute('data-testid') || parent.className || 'default' : 'default';
+            
+            if (!radioGroups.has(groupId)) {
+                radioGroups.set(groupId, []);
+            }
+            radioGroups.get(groupId).push(radio);
+        });
+        
+        // 各グループごとに、選択されたラジオボタンを1つだけ特定
+        radioGroups.forEach((groupRadios, groupId) => {
+            // グループ内で実際に選択されているラジオボタンを探す
+            let checkedRadio = null;
+            
+            groupRadios.forEach(radio => {
+                const isChecked = radio.getAttribute('aria-checked') === 'true';
+                const computedStyle = window.getComputedStyle(radio);
+                
+                // より正確な選択状態の判定
+                if (isChecked && computedStyle.display !== 'none') {
+                    // 既にチェック済みのラジオボタンが見つかった場合
+                    if (checkedRadio) {
+                        // 後から見つかった方を優先（Streamlitが更新した方）
+                        checkedRadio = radio;
+                    } else {
+                        checkedRadio = radio;
+                    }
+                }
+            });
+            
+            // グループ内のすべてのラジオボタンに色を適用
+            groupRadios.forEach(radio => {
+                radio.style.display = 'flex';
+                radio.style.visibility = 'visible';
+                radio.style.opacity = '1';
+                
+                // 選択されているかどうか
+                const isThisChecked = (radio === checkedRadio);
+                
+                // 色を適用
+                if (isThisChecked) {
+                    // 選択済み: 緑色
+                    radio.style.setProperty('border-color', GREEN, 'important');
+                    radio.style.setProperty('background-color', GREEN, 'important');
+                    
+                    // 子要素にも緑色を適用
+                    radio.querySelectorAll('*').forEach(child => {
+                        if (child.tagName === 'DIV' || child.tagName === 'SVG' || child.tagName === 'circle') {
+                            const computed = window.getComputedStyle(child);
+                            const borderRadius = computed.borderRadius;
+                            const width = parseFloat(computed.width) || 0;
+                            
+                            if (borderRadius === '50%' || borderRadius === '9999px' || (width > 0 && width < 30)) {
+                                child.style.setProperty('border-color', GREEN, 'important');
+                                if (width >= 10) {
+                                    child.style.setProperty('background-color', GREEN, 'important');
+                                } else if (width < 10) {
+                                    child.style.setProperty('background-color', 'white', 'important');
+                                }
+                            }
+                        }
+                        if (child.tagName === 'svg' || child.tagName === 'circle') {
+                            child.style.setProperty('stroke', GREEN, 'important');
+                            child.style.setProperty('fill', isThisChecked ? GREEN : 'transparent', 'important');
+                        }
+                    });
+                } else {
+                    // 未選択: 赤色
+                    radio.style.setProperty('border-color', RED, 'important');
+                    radio.style.setProperty('background-color', 'transparent', 'important');
+                    
+                    // 子要素にも赤色を適用
+                    radio.querySelectorAll('*').forEach(child => {
+                        if (child.tagName === 'DIV' || child.tagName === 'SVG' || child.tagName === 'circle') {
+                            const computed = window.getComputedStyle(child);
+                            const borderRadius = computed.borderRadius;
+                            
+                            if (borderRadius === '50%' || borderRadius === '9999px') {
+                                child.style.setProperty('border-color', RED, 'important');
+                                child.style.setProperty('background-color', 'transparent', 'important');
+                            }
+                        }
+                        if (child.tagName === 'svg' || child.tagName === 'circle') {
+                            child.style.setProperty('stroke', RED, 'important');
+                            child.style.setProperty('fill', 'transparent', 'important');
+                        }
+                    });
+                }
+            });
+        });
+    }
+    
+    // 即座に実行
+    applyRadioColors();
+    
+    // 複数のタイミングで実行
+    setTimeout(applyRadioColors, 100);
+    setTimeout(applyRadioColors, 300);
+    setTimeout(applyRadioColors, 500);
+    setTimeout(applyRadioColors, 1000);
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(applyRadioColors, 100);
+            setTimeout(applyRadioColors, 500);
+        });
+    }
+    
+    // MutationObserverで監視（aria-checked属性の変更を検出）
+    const observer = new MutationObserver(function(mutations) {
+        let needsUpdate = false;
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-checked') {
+                needsUpdate = true;
+            }
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                needsUpdate = true;
+            }
+        });
+        if (needsUpdate) {
+            setTimeout(applyRadioColors, 50);
+            setTimeout(applyRadioColors, 150);
+            setTimeout(applyRadioColors, 300);
+        }
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['aria-checked', 'class']
+    });
+    
+    // クリックイベントでも更新
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('[data-baseweb="radio"]')) {
+            setTimeout(applyRadioColors, 10);
+            setTimeout(applyRadioColors, 100);
+            setTimeout(applyRadioColors, 300);
+        }
+    }, true);
+    
+    // 定期的にチェック
+    setInterval(applyRadioColors, 500);
+})();
+</script>
 """, unsafe_allow_html=True)
 
 # 診断をやり直すボタン（既に回答がある場合のみ表示）
@@ -173,10 +314,6 @@ for category, category_name in CATEGORIES.items():
         
         save_answer_callback = make_save_answer_callback(question_id, radio_key)
         
-        # 未回答の場合は、ラジオボタンを半透明表示
-        if saved_index == 0:
-            st.markdown(f'<div data-question-id="{question_id}">', unsafe_allow_html=True)
-        
         selected_index_with_placeholder = st.radio(
             question_text,
             options=option_values,  # use int values
@@ -185,9 +322,7 @@ for category, category_name in CATEGORIES.items():
             key=radio_key,
             on_change=save_answer_callback
         )
-        
-        if saved_index == 0:
-            st.markdown("</div>", unsafe_allow_html=True)
+
         
         # 保存ロジック：プレースホルダー(0)以外を回答として保存
         if selected_index_with_placeholder > 0:

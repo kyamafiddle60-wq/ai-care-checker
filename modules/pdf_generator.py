@@ -587,7 +587,36 @@ class DiagnosticPDFGenerator:
         story.append(improvement_title)
         story.append(Spacer(1, 5*mm))
         
-        for i, improvement in enumerate(diagnosis_data['top3_improvements'], 1):
+        # top3_improvementsが存在しない場合は、categoriesから自動生成
+        if 'top3_improvements' not in diagnosis_data or not diagnosis_data['top3_improvements']:
+            # スコアが低い順にソートしてTOP3を取得
+            sorted_categories = sorted(
+                diagnosis_data.get('categories', []),
+                key=lambda x: x.get('score', 100)
+            )[:3]
+            
+            top3_improvements = []
+            for cat in sorted_categories:
+                category_name = cat.get('name', '')
+                category_display_name = {
+                    'business': 'ビジネス準備度',
+                    'data': 'データ準備度',
+                    'organization': '組織準備度',
+                    'technology': '技術準備度',
+                    'process': 'プロセス準備度',
+                    'compliance': 'コンプライアンス準備度'
+                }.get(category_name, category_name)
+                
+                top3_improvements.append({
+                    'category': category_display_name,
+                    'score': cat.get('score', 0),
+                    'percentage': cat.get('percentage', 0),
+                    'diff': cat.get('diff', 0),
+                    'suggestion': f"{category_display_name}の改善を優先的に進めることを推奨します。経営陣とAI導入の効果について認識を共有し、ROI目標を設定し、予算確保の計画を立ててください。"
+                })
+            diagnosis_data['top3_improvements'] = top3_improvements
+        
+        for i, improvement in enumerate(diagnosis_data.get('top3_improvements', []), 1):
             priority_heading = Paragraph(f"{i}. {improvement['category']}", self.styles['CustomHeading2'])
             story.append(priority_heading)
             
